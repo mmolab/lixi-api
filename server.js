@@ -42,6 +42,12 @@ async function initializeData() {
         players: [],
         openedBy: [],
         isActive: true,
+        config: {
+          useFixedAmounts: false,
+          fixedAmounts: [],
+          randomMin: 10000,
+          randomMax: 100000
+        },
         createdAt: new Date().toISOString(),
         lastActivity: new Date().toISOString()
       };
@@ -75,10 +81,21 @@ async function saveGameState(gameState) {
   }
 }
 
-// Calculate fair random amount
-function calculateRandomAmount(remainingMoney, remainingEnvelopes) {
-  const minAmount = 10000;
-  const maxAmount = 100000;
+// Calculate amount based on game config
+function calculateAmount(gameState, envelopeIndex) {
+  const { config } = gameState;
+  
+  if (config.useFixedAmounts && config.fixedAmounts.length > 0) {
+    // Use fixed amounts in order
+    const amountIndex = envelopeIndex % config.fixedAmounts.length;
+    return config.fixedAmounts[amountIndex];
+  }
+  
+  // Use random distribution
+  const minAmount = config.randomMin;
+  const maxAmount = config.randomMax;
+  const remainingMoney = gameState.remainingMoney;
+  const remainingEnvelopes = gameState.remainingEnvelopes;
   
   if (remainingEnvelopes === 1) {
     return remainingMoney; // Last envelope gets all remaining money
@@ -180,8 +197,9 @@ app.post('/api/game/open', async (req, res) => {
     return res.status(400).json({ error: 'Player already opened an envelope' });
   }
   
-  // Calculate random amount
-  const amount = calculateRandomAmount(gameState.remainingMoney, gameState.remainingEnvelopes);
+  // Calculate amount based on config
+  const envelopeIndex = gameState.openedBy.length; // 0-based index
+  const amount = calculateAmount(gameState, envelopeIndex);
   
   // Update game state
   gameState.remainingMoney -= amount;
@@ -221,15 +239,31 @@ app.post('/api/game/open', async (req, res) => {
 
 // Admin routes
 app.post('/api/admin/reset', async (req, res) => {
+  const { 
+    totalMoney = 500000, 
+    envelopeCount = 10,
+    maxPlayers = 10,
+    amounts = [], // Fixed amounts array
+    randomMin = 10000,
+    randomMax = 100000,
+    useFixedAmounts = false
+  } = req.body;
+  
   const newGameState = {
     sessionId: uuidv4(),
-    totalMoney: 500000,
-    remainingMoney: 500000,
-    remainingEnvelopes: 10,
-    maxPlayers: 10,
+    totalMoney: parseInt(totalMoney),
+    remainingMoney: parseInt(totalMoney),
+    remainingEnvelopes: parseInt(envelopeCount),
+    maxPlayers: parseInt(maxPlayers),
     players: [],
     openedBy: [],
     isActive: true,
+    config: {
+      useFixedAmounts,
+      fixedAmounts: amounts.map(a => parseInt(a)),
+      randomMin: parseInt(randomMin),
+      randomMax: parseInt(randomMax)
+    },
     createdAt: new Date().toISOString(),
     lastActivity: new Date().toISOString()
   };
